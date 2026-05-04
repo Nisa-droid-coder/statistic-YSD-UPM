@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>YSD2026 - Dashboard Statistik Peserta</title>
+    <!-- Chart.js for beautiful interactive charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- PapaParse for robust CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Roboto', 'Inter', sans-serif;
+        }
+        body {
+            background: #eef5ea;
+            margin: 0;
+            padding: 24px 20px;
+        }
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        /* Header & upload area */
+        .header {
+            background: #1e4a2f;
+            color: white;
+            padding: 20px 28px;
+            border-radius: 32px;
+            margin-bottom: 28px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+        .title h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            letter-spacing: -0.3px;
+            font-weight: 700;
+        }
+        .title p {
+            margin: 6px 0 0;
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        .upload-area {
+            background: white;
+            padding: 6px 18px;
+            border-radius: 60px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .upload-label {
+            background: #2e7d32;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: 0.2s;
+            border: none;
+            display: inline-block;
+        }
+        .upload-label:hover {
+            background: #145214;
+            transform: scale(0.98);
+        }
+        #fileInput {
+            display: none;
+        }
+        .file-name {
+            font-size: 0.8rem;
+            color: #2c5e2c;
+            font-weight: 500;
+            background: #eef5ea;
+            padding: 4px 12px;
+            border-radius: 30px;
+        }
+        .info-badge {
+            background: #f5f5dc;
+            border-radius: 30px;
+            padding: 5px 14px;
+            font-size: 0.75rem;
+            color: #1e4a2f;
+        }
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 22px;
+            margin-bottom: 35px;
+        }
+        .kpi-card {
+            background: white;
+            border-radius: 28px;
+            padding: 20px 18px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+            border-left: 8px solid #3c9e3c;
+            text-align: center;
+        }
+        .kpi-card h3 {
+            margin: 0 0 12px 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #2c5e2c;
+            letter-spacing: 0.3px;
+        }
+        .kpi-number {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #1b4d1b;
+            line-height: 1.1;
+        }
+        .kpi-sub {
+            font-size: 0.8rem;
+            color: #557c55;
+            margin-top: 8px;
+        }
+        /* charts row */
+        .charts-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 28px;
+            margin-bottom: 35px;
+        }
+        .chart-box {
+            flex: 1;
+            min-width: 280px;
+            background: white;
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.05);
+            transition: 0.2s;
+        }
+        .chart-box h3 {
+            margin-top: 0;
+            margin-bottom: 18px;
+            font-weight: 600;
+            color: #1f3b1f;
+            border-left: 5px solid #66bb6a;
+            padding-left: 15px;
+        }
+        canvas {
+            max-height: 320px;
+            width: 100%;
+        }
+        /* table */
+        .table-wrapper {
+            background: white;
+            border-radius: 28px;
+            padding: 20px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.05);
+            overflow-x: auto;
+        }
+        .table-wrapper h3 {
+            margin-top: 0;
+            font-weight: 600;
+            color: #1f3b1f;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 8px;
+            border-bottom: 1px solid #e2e8e2;
+        }
+        th {
+            background-color: #e8f3e8;
+            color: #1f4f1f;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background: #f8fff6;
+        }
+        .badge-paid {
+            background: #c8e6c9;
+            color: #1e5a1e;
+            padding: 4px 10px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.7rem;
+            display: inline-block;
+        }
+        .badge-pending {
+            background: #fff3e0;
+            color: #b45f06;
+            padding: 4px 10px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.7rem;
+        }
+        .empty-table {
+            text-align: center;
+            padding: 40px;
+            color: #7c8f7c;
+        }
+        .footer-note {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #5d7a5d;
+        }
+        @media (max-width: 680px) {
+            body { padding: 16px; }
+            .kpi-number { font-size: 2rem; }
+            .header { flex-direction: column; align-items: stretch; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard-container">
+    <div class="header">
+        <div class="title">
+            <h1>📊 YSD2026 · DASHBOARD STATISTIK PESERTA</h1>
+            <p>Jumlah pendaftaran | Belum bayar | Taburan umur | Muat naik CSV (YSD2026 format)</p>
+        </div>
+        <div class="upload-area">
+            <label class="upload-label" for="fileInput">📂 Muat naik fail CSV</label>
+            <input type="file" id="fileInput" accept=".csv">
+            <span id="fileNameDisplay" class="file-name">Tiada fail dipilih</span>
+            <div class="info-badge">⬆️ Pilih CSV untuk analisis</div>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <h3>👥 JUMLAH PESERTA BERDAFTAR</h3>
+            <div class="kpi-number" id="totalParticipants">0</div>
+            <div class="kpi-sub">keseluruhan peserta (individu)</div>
+        </div>
+        <div class="kpi-card">
+            <h3>⏳ BELUM BAYAR (PENDING)</h3>
+            <div class="kpi-number" id="pendingCount">0</div>
+            <div class="kpi-sub">peserta yang belum selesai bayar</div>
+        </div>
+        <div class="kpi-card">
+            <h3>✅ SUDAH BAYAR (PAID)</h3>
+            <div class="kpi-number" id="paidCount">0</div>
+            <div class="kpi-sub">peserta telah selesai pembayaran</div>
+        </div>
+        <div class="kpi-card">
+            <h3>📋 JUMLAH TRANSAKSI</h3>
+            <div class="kpi-number" id="totalBookings">0</div>
+            <div class="kpi-sub">bilangan booking (baris CSV)</div>
+        </div>
+    </div>
+
+    <!-- Charts: Taburan Umur & Status Pembayaran -->
+    <div class="charts-row">
+        <div class="chart-box">
+            <h3>🎂 TABURAN UMUR PESERTA</h3>
+            <canvas id="ageChart" width="400" height="300" style="max-height: 320px;"></canvas>
+            <div style="font-size:0.7rem; text-align:center; margin-top:8px; color:#4a674a;">Umur berdasarkan format Nama (Umur) dalam CSV</div>
+        </div>
+        <div class="chart-box">
+            <h3>💳 STATUS PEMBAYARAN (MENGIKUT PESERTA)</h3>
+            <canvas id="paymentChart" width="400" height="300" style="max-height: 320px;"></canvas>
+        </div>
+    </div>
+
+    <!-- Senarai lengkap peserta -->
+    <div class="table-wrapper">
+        <h3>📋 SENARAI LENGKAP PESERTA</h3>
+        <div style="overflow-x: auto;">
+            <table id="participantsTable">
+                <thead>
+                    <tr><th>Booking Ref</th><th>Nama Peserta</th><th>Umur</th><th>Status Bayar</th><th>Email Penjaga</th><th>Tarikh Booking</th></tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="6" class="empty-table">📭 Muat naik fail CSV untuk melihat data peserta...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="footer-note">
+        📌 Statistik berdasarkan fail CSV dengan ruangan: 'Participants List (Name | Age)', 'Payment Status', 'Booking Ref', 'Email', 'Booking Date'.<br>
+        Taburan umur hanya melibatkan peserta yang mempunyai nilai umur yang sah.
+    </div>
+</div>
+
+<script>
+    // ----------------------------- DATA + GLOBAL VARIABLES -----------------------------
+    let currentParticipants = [];      // array of { bookingRef, name, age, paymentStatus, email, bookingDate }
+    let currentBookingRows = [];
+    let ageChart = null;
+    let paymentChart = null;
+
+    // DOM refs
+    const totalParticipantsEl = document.getElementById('totalParticipants');
+    const pendingCountEl = document.getElementById('pendingCount');
+    const paidCountEl = document.getElementById('paidCount');
+    const totalBookingsEl = document.getElementById('totalBookings');
+    const tableBody = document.getElementById('tableBody');
+    const fileInput = document.getElementById('fileInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+    // ---------- Helper: Parse "Participants List (Name | Age)" column ----------
+    // Format example: "Kor Jaelyn (7); Kor Maelyn (5); Teck Yong Xin (7)"
+    // Also supports comma variations? but mostly semicolon separated.
+    function parseParticipantsList(participantsStr) {
+        if (!participantsStr || participantsStr.trim() === "") return [];
+        // Split by semicolon (;) — covers all rows from sample
+        let entries = participantsStr.split(';');
+        const result = [];
+        for (let entry of entries) {
+            entry = entry.trim();
+            if (entry === "") continue;
+            // pattern: Name (age) possibly with spaces before parentheses
+            const match = entry.match(/^(.*?)\s*\((\d+)\)\s*$/);
+            if (match) {
+                let fullName = match[1].trim();
+                let age = parseInt(match[2], 10);
+                if (!isNaN(age)) {
+                    result.push({ name: fullName, age: age });
+                } else {
+                    result.push({ name: entry, age: null });
+                }
+            } else {
+                // fallback for malformed rows: just store name as raw entry
+                result.push({ name: entry, age: null });
+            }
+        }
+        return result;
+    }
+
+    // ---------- Process CSV data into flat participants array + booking stats ----------
+    function processCsvData(csvRowsArray) {
+        const participantsFlat = [];
+        let validBookingCount = csvRowsArray.length;
+        
+        for (let row of csvRowsArray) {
+            // Get required fields
+            const bookingRef = row["Booking Ref"] || row["Booking Ref"] || "N/A";
+            const paymentRaw = (row["Payment Status"] || "").toString().trim().toLowerCase();
+            const paymentStatus = paymentRaw === "paid" ? "paid" : "pending";
+            const email = row["Email"] || "-";
+            const bookingDate = row["Booking Date"] || "-";
+            const participantsColumn = row["Participants List (Name | Age)"] || "";
+            
+            const parsedList = parseParticipantsList(participantsColumn);
+            
+            for (let p of parsedList) {
+                if (p.name && p.name !== "") {
+                    participantsFlat.push({
+                        bookingRef: bookingRef,
+                        name: p.name,
+                        age: p.age,
+                        paymentStatus: paymentStatus,
+                        email: email,
+                        bookingDate: bookingDate
+                    });
+                }
+            }
+        }
+        
+        return { participants: participantsFlat, totalBookingsCount: validBookingCount };
+    }
+
+    // ---------- render full dashboard: KPI, charts and table ----------
+    function renderDashboard(participantsList, totalBookingsCount) {
+        // KPI calculations
+        const totalPeserta = participantsList.length;
+        const pendingParticipants = participantsList.filter(p => p.paymentStatus === "pending").length;
+        const paidParticipants = participantsList.filter(p => p.paymentStatus === "paid").length;
+        
+        totalParticipantsEl.innerText = totalPeserta;
+        pendingCountEl.innerText = pendingParticipants;
+        paidCountEl.innerText = paidParticipants;
+        totalBookingsEl.innerText = totalBookingsCount;
+        
+        // --- AGE DISTRIBUTION (valid ages only) ---
+        const validAges = participantsList.filter(p => p.age !== null && !isNaN(p.age)).map(p => p.age);
+        const ageMap = new Map(); // age -> count
+        for (let age of validAges) {
+            ageMap.set(age, (ageMap.get(age) || 0) + 1);
+        }
+        const sortedAges = Array.from(ageMap.keys()).sort((a,b) => a - b);
+        const ageLabels = sortedAges;
+        const ageCounts = sortedAges.map(age => ageMap.get(age));
+        
+        // Update age chart (bar)
+        if (ageChart) ageChart.destroy();
+        const ageCtx = document.getElementById('ageChart').getContext('2d');
+        ageChart = new Chart(ageCtx, {
+            type: 'bar',
+            data: {
+                labels: ageLabels,
+                datasets: [{
+                    label: 'Bilangan Peserta',
+                    data: ageCounts,
+                    backgroundColor: '#4caf50',
+                    borderRadius: 8,
+                    barPercentage: 0.65,
+                    categoryPercentage: 0.8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: (ctx) => `${ctx.raw} peserta (umur ${ctx.label} tahun)` } }
+                },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Jumlah Peserta', font: { size: 11 } }, ticks: { stepSize: 1, precision: 0 } },
+                    x: { title: { display: true, text: 'Umur (tahun)', font: { size: 11 } } }
+                }
+            }
+        });
+        
+        // --- PAYMENT CHART (Peserta count) ---
+        if (paymentChart) paymentChart.destroy();
+        const payCtx = document.getElementById('paymentChart').getContext('2d');
+        paymentChart = new Chart(payCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['✅ Sudah Bayar (Paid)', '⏳ Belum Bayar (Pending)'],
+                datasets: [{
+                    data: [paidParticipants, pendingParticipants],
+                    backgroundColor: ['#2e7d32', '#ffb74d'],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} peserta (${((ctx.raw/totalPeserta)*100).toFixed(1)}%)` } }
+                }
+            }
+        });
+        
+        // Render detailed table
+        renderParticipantsTable(participantsList);
+    }
+    
+    // render table rows
+    function renderParticipantsTable(participantsList) {
+        if (!participantsList || participantsList.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="empty-table">📭 Tiada data peserta. Sila muat naik CSV yang sah.</td></tr>';
+            return;
+        }
+        // build rows (show all participants)
+        let htmlRows = '';
+        for (let p of participantsList) {
+            const statusBadge = p.paymentStatus === 'paid' 
+                ? '<span class="badge-paid">✓ PAID</span>' 
+                : '<span class="badge-pending">⌛ PENDING</span>';
+            const ageDisplay = (p.age !== null && !isNaN(p.age)) ? p.age : '?';
+            const safeName = escapeHtml(p.name);
+            const safeBooking = escapeHtml(p.bookingRef);
+            const safeEmail = escapeHtml(p.email.length > 30 ? p.email.substring(0, 28)+'..' : p.email);
+            const safeDate = escapeHtml(p.bookingDate);
+            htmlRows += `<tr>
+                <td>${safeBooking}</td>
+                <td>${safeName}</td>
+                <td>${ageDisplay}</td>
+                <td>${statusBadge}</td>
+                <td>${safeEmail}</td>
+                <td>${safeDate}</td>
+            </tr>`;
+        }
+        tableBody.innerHTML = htmlRows;
+    }
+    
+    // basic XSS protection
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
+    // ---------- CSV Load & Parse via PapaParse ----------
+    function loadAndProcessCSV(file) {
+        if (!file) {
+            // reset to empty state (no default safety, just clear)
+            currentParticipants = [];
+            currentBookingRows = [];
+            renderDashboard([], 0);
+            fileNameDisplay.innerText = "Tiada fail dipilih";
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const csvText = e.target.result;
+            Papa.parse(csvText, {
+                header: true,
+                skipEmptyLines: true,
+                encoding: "UTF-8",
+                complete: (results) => {
+                    if (results.errors && results.errors.length) {
+                        console.warn("PapaParse warnings:", results.errors);
+                    }
+                    let data = results.data;
+                    if (!data || data.length === 0) {
+                        alert("⚠️ CSV tidak mengandungi data atau format tidak sesuai.");
+                        currentParticipants = [];
+                        renderDashboard([], 0);
+                        return;
+                    }
+                    // Validate important columns
+                    const firstRow = data[0];
+                    const hasParticipantsCol = firstRow.hasOwnProperty("Participants List (Name | Age)");
+                    const hasPaymentCol = firstRow.hasOwnProperty("Payment Status");
+                    const hasBookingRefCol = firstRow.hasOwnProperty("Booking Ref");
+                    
+                    if (!hasParticipantsCol || !hasPaymentCol) {
+                        alert("❌ Format CSV tidak disokong. Pastikan terdapat ruangan: 'Participants List (Name | Age)', 'Payment Status', dan 'Booking Ref'.");
+                        return;
+                    }
+                    
+                    const { participants, totalBookingsCount } = processCsvData(data);
+                    if (participants.length === 0) {
+                        alert("⚠️ Tiada peserta yang dapat dikesan. Periksa format lajur 'Participants List (Name | Age)'.\nContoh: 'Nama (Umur); Nama2 (Umur)'");
+                    }
+                    currentParticipants = participants;
+                    currentBookingRows = data;
+                    renderDashboard(currentParticipants, totalBookingsCount);
+                    fileNameDisplay.innerText = file.name;
+                },
+                error: (err) => {
+                    console.error(err);
+                    alert("Ralat parsing CSV: " + err.message);
+                    currentParticipants = [];
+                    renderDashboard([], 0);
+                }
+            });
+        };
+        reader.onerror = () => {
+            alert("Gagal membaca fail. Sila cuba lagi.");
+            currentParticipants = [];
+            renderDashboard([], 0);
+        };
+        reader.readAsText(file, "UTF-8");
+    }
+    
+    // ---------- Event listeners ----------
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            loadAndProcessCSV(file);
+        } else {
+            // No file selected, reset view
+            currentParticipants = [];
+            renderDashboard([], 0);
+            fileNameDisplay.innerText = "Tiada fail dipilih";
+        }
+    });
+    
+    // optional: drag & drop not mandatory but nice hint (simple but to keep lightweight)
+    // Also provide a note: no default CSV auto-loaded, user must upload.
+    // To match requirement: "no need to add csv default safety" - we do NOT embed any default.
+    // However we display empty state.
+    
+    // initial empty dashboard (no default data)
+    currentParticipants = [];
+    renderDashboard([], 0);
+    fileNameDisplay.innerText = "Belum muat naik CSV";
+    
+    // Additional helper: show instruction on table when empty
+    // already set by render.
+</script>
+</body>
+</html>
