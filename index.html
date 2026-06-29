@@ -153,13 +153,14 @@
             max-height: 320px;
             width: 100%;
         }
-        /* table */
+        /* tables */
         .table-wrapper {
             background: white;
             border-radius: 28px;
             padding: 20px;
             box-shadow: 0 6px 14px rgba(0,0,0,0.05);
             overflow-x: auto;
+            margin-bottom: 28px;
         }
         .table-wrapper h3 {
             margin-top: 0;
@@ -217,6 +218,41 @@
             font-size: 0.75rem;
             color: #5d7a5d;
         }
+        .age-table-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px 12px;
+            background: #fafffa;
+            padding: 12px 16px;
+            border-radius: 20px;
+            margin-top: 6px;
+            border: 1px solid #d8e8d8;
+        }
+        .age-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #d0e0d0;
+            padding: 4px 0;
+            font-size: 0.85rem;
+        }
+        .age-item strong {
+            color: #1f4a1f;
+        }
+        .age-item span {
+            background: #e6f0e6;
+            padding: 0 10px;
+            border-radius: 30px;
+            font-weight: 600;
+            color: #1d4f1d;
+        }
+        .age-table-title {
+            font-weight: 600;
+            color: #1f3b1f;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
         @media (max-width: 680px) {
             body { padding: 16px; }
             .kpi-number { font-size: 2rem; }
@@ -266,13 +302,21 @@
     <!-- Charts: Taburan Umur & Status Pembayaran -->
     <div class="charts-row">
         <div class="chart-box">
-            <h3>🎂 TABURAN UMUR PESERTA</h3>
+            <h3>🎂 TABURAN UMUR PESERTA (BAR)</h3>
             <canvas id="ageChart" width="400" height="300" style="max-height: 320px;"></canvas>
             <div style="font-size:0.7rem; text-align:center; margin-top:8px; color:#4a674a;">Umur berdasarkan format Nama (Umur) dalam CSV</div>
         </div>
         <div class="chart-box">
             <h3>💳 STATUS PEMBAYARAN (MENGIKUT PESERTA)</h3>
             <canvas id="paymentChart" width="400" height="300" style="max-height: 320px;"></canvas>
+        </div>
+    </div>
+
+    <!-- JADUAL TABURAN UMUR (angka tepat) - tambahan baru -->
+    <div class="table-wrapper">
+        <h3>📊 TABURAN UMUR · BILANGAN PESERTA MENGIKUT TAHUN</h3>
+        <div id="ageDistributionContainer">
+            <div class="empty-table" style="padding:20px;">⬆️ Muat naik CSV untuk melihat taburan umur tepat.</div>
         </div>
     </div>
 
@@ -311,19 +355,16 @@
     const tableBody = document.getElementById('tableBody');
     const fileInput = document.getElementById('fileInput');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const ageDistContainer = document.getElementById('ageDistributionContainer');
 
     // ---------- Helper: Parse "Participants List (Name | Age)" column ----------
-    // Format example: "Kor Jaelyn (7); Kor Maelyn (5); Teck Yong Xin (7)"
-    // Also supports comma variations? but mostly semicolon separated.
     function parseParticipantsList(participantsStr) {
         if (!participantsStr || participantsStr.trim() === "") return [];
-        // Split by semicolon (;) — covers all rows from sample
         let entries = participantsStr.split(';');
         const result = [];
         for (let entry of entries) {
             entry = entry.trim();
             if (entry === "") continue;
-            // pattern: Name (age) possibly with spaces before parentheses
             const match = entry.match(/^(.*?)\s*\((\d+)\)\s*$/);
             if (match) {
                 let fullName = match[1].trim();
@@ -334,7 +375,6 @@
                     result.push({ name: entry, age: null });
                 }
             } else {
-                // fallback for malformed rows: just store name as raw entry
                 result.push({ name: entry, age: null });
             }
         }
@@ -347,7 +387,6 @@
         let validBookingCount = csvRowsArray.length;
         
         for (let row of csvRowsArray) {
-            // Get required fields
             const bookingRef = row["Booking Ref"] || row["Booking Ref"] || "N/A";
             const paymentRaw = (row["Payment Status"] || "").toString().trim().toLowerCase();
             const paymentStatus = paymentRaw === "paid" ? "paid" : "pending";
@@ -374,9 +413,30 @@
         return { participants: participantsFlat, totalBookingsCount: validBookingCount };
     }
 
-    // ---------- render full dashboard: KPI, charts and table ----------
+    // ---------- Render jadual taburan umur (angka tepat) ----------
+    function renderAgeDistributionTable(participantsList) {
+        const validAges = participantsList.filter(p => p.age !== null && !isNaN(p.age)).map(p => p.age);
+        if (validAges.length === 0) {
+            ageDistContainer.innerHTML = `<div class="empty-table" style="padding:20px;">📭 Tiada data umur sah untuk dipaparkan.</div>`;
+            return;
+        }
+        const ageMap = new Map();
+        for (let age of validAges) {
+            ageMap.set(age, (ageMap.get(age) || 0) + 1);
+        }
+        const sortedAges = Array.from(ageMap.keys()).sort((a,b) => a - b);
+        
+        let html = `<div class="age-table-title">📌 Jumlah mengikut umur (tahun) — ${validAges.length} peserta dengan umur sah</div><div class="age-table-grid">`;
+        for (let age of sortedAges) {
+            const count = ageMap.get(age);
+            html += `<div class="age-item"><strong>${age} tahun</strong> <span>${count}</span></div>`;
+        }
+        html += `</div>`;
+        ageDistContainer.innerHTML = html;
+    }
+
+    // ---------- render full dashboard: KPI, charts, age table, participant table ----------
     function renderDashboard(participantsList, totalBookingsCount) {
-        // KPI calculations
         const totalPeserta = participantsList.length;
         const pendingParticipants = participantsList.filter(p => p.paymentStatus === "pending").length;
         const paidParticipants = participantsList.filter(p => p.paymentStatus === "paid").length;
@@ -388,7 +448,7 @@
         
         // --- AGE DISTRIBUTION (valid ages only) ---
         const validAges = participantsList.filter(p => p.age !== null && !isNaN(p.age)).map(p => p.age);
-        const ageMap = new Map(); // age -> count
+        const ageMap = new Map();
         for (let age of validAges) {
             ageMap.set(age, (ageMap.get(age) || 0) + 1);
         }
@@ -450,6 +510,9 @@
             }
         });
         
+        // --- JADUAL TABURAN UMUR (angka tepat) ---
+        renderAgeDistributionTable(participantsList);
+        
         // Render detailed table
         renderParticipantsTable(participantsList);
     }
@@ -460,7 +523,6 @@
             tableBody.innerHTML = '<tr><td colspan="6" class="empty-table">📭 Tiada data peserta. Sila muat naik CSV yang sah.</td></tr>';
             return;
         }
-        // build rows (show all participants)
         let htmlRows = '';
         for (let p of participantsList) {
             const statusBadge = p.paymentStatus === 'paid' 
@@ -483,7 +545,6 @@
         tableBody.innerHTML = htmlRows;
     }
     
-    // basic XSS protection
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -497,7 +558,6 @@
     // ---------- CSV Load & Parse via PapaParse ----------
     function loadAndProcessCSV(file) {
         if (!file) {
-            // reset to empty state (no default safety, just clear)
             currentParticipants = [];
             currentBookingRows = [];
             renderDashboard([], 0);
@@ -523,7 +583,6 @@
                         renderDashboard([], 0);
                         return;
                     }
-                    // Validate important columns
                     const firstRow = data[0];
                     const hasParticipantsCol = firstRow.hasOwnProperty("Participants List (Name | Age)");
                     const hasPaymentCol = firstRow.hasOwnProperty("Payment Status");
@@ -565,25 +624,16 @@
         if (file) {
             loadAndProcessCSV(file);
         } else {
-            // No file selected, reset view
             currentParticipants = [];
             renderDashboard([], 0);
             fileNameDisplay.innerText = "Tiada fail dipilih";
         }
     });
     
-    // optional: drag & drop not mandatory but nice hint (simple but to keep lightweight)
-    // Also provide a note: no default CSV auto-loaded, user must upload.
-    // To match requirement: "no need to add csv default safety" - we do NOT embed any default.
-    // However we display empty state.
-    
-    // initial empty dashboard (no default data)
+    // initial empty dashboard
     currentParticipants = [];
     renderDashboard([], 0);
     fileNameDisplay.innerText = "Belum muat naik CSV";
-    
-    // Additional helper: show instruction on table when empty
-    // already set by render.
 </script>
 </body>
 </html>
